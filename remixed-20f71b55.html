@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Electron Movement &amp; Stability — Interactive Simulation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+  :root{--bg:#060a14;--panel:#0d1526;--border:#1a2d5a;--accent:#00e5ff;--accent2:#ff6b35;--green:#39ff14;--yellow:#ffd60a;--purple:#b44dff;--text:#c8d8f0;--dim:#4a6080;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Exo 2',sans-serif;min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(1px 1px at 12% 22%,rgba(255,255,255,.25) 0%,transparent 100%),radial-gradient(1px 1px at 33% 78%,rgba(255,255,255,.18) 0%,transparent 100%),radial-gradient(1px 1px at 71% 14%,rgba(255,255,255,.22) 0%,transparent 100%),radial-gradient(1px 1px at 88% 62%,rgba(255,255,255,.18) 0%,transparent 100%),radial-gradient(1px 1px at 52% 48%,rgba(255,255,255,.14) 0%,transparent 100%);pointer-events:none;z-index:0;}
+  header{text-align:center;padding:28px 20px 16px;position:relative;z-index:1;border-bottom:1px solid var(--border);background:linear-gradient(180deg,rgba(0,229,255,.05) 0%,transparent 100%);}
+  header h1{font-family:'Orbitron',monospace;font-size:clamp(1rem,3vw,1.75rem);font-weight:900;color:var(--accent);text-shadow:0 0 20px rgba(0,229,255,.5);letter-spacing:.08em;text-transform:uppercase;}
+  header p{margin-top:6px;font-size:.82rem;color:var(--dim);font-family:'Share Tech Mono',monospace;}
+  .main-grid{display:grid;grid-template-columns:1fr 272px;gap:14px;padding:14px;max-width:1080px;margin:0 auto;position:relative;z-index:1;}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;position:relative;overflow:hidden;}
+  .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.35;}
+  .panel-title{font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+  .panel-title::before{content:'▶';font-size:.52rem;}
+  #sim-canvas{width:100%;aspect-ratio:16/7;background:#020510;border-radius:6px;border:1px solid var(--border);cursor:pointer;display:block;}
+  .mode-tabs{display:flex;gap:8px;margin-bottom:10px;}
+  .tab{flex:1;padding:7px 10px;background:transparent;border:1px solid var(--border);color:var(--dim);font-family:'Exo 2',sans-serif;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;cursor:pointer;border-radius:4px;transition:all .2s;}
+  .tab.active{background:rgba(0,229,255,.1);border-color:var(--accent);color:var(--accent);text-shadow:0 0 8px rgba(0,229,255,.4);}
+  .tab:hover:not(.active){border-color:var(--dim);color:var(--text);}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:.68rem;font-family:'Share Tech Mono',monospace;color:var(--dim);}
+  .legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .btn{padding:7px 16px;background:rgba(0,229,255,.08);border:1px solid var(--accent);color:var(--accent);font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.1em;cursor:pointer;border-radius:4px;transition:all .2s;text-transform:uppercase;}
+  .btn:hover{background:rgba(0,229,255,.2);box-shadow:0 0 12px rgba(0,229,255,.3);}
+  .btn.orange{border-color:var(--accent2);color:var(--accent2);background:rgba(255,107,53,.08);}
+  .btn.orange:hover{background:rgba(255,107,53,.2);box-shadow:0 0 12px rgba(255,107,53,.3);}
+  .status-bar{margin-top:9px;padding:7px 11px;background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--accent);min-height:32px;}
+  #energy-canvas{width:100%;height:150px;background:#020510;border-radius:6px;border:1px solid var(--border);display:block;}
+  .right-col{display:flex;flex-direction:column;gap:12px;}
+  .info-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:13px;}
+  .info-card h3{font-family:'Orbitron',monospace;font-size:.62rem;color:var(--accent2);letter-spacing:.12em;text-transform:uppercase;margin-bottom:9px;}
+  .info-card p{font-size:.76rem;line-height:1.6;color:var(--text);margin-bottom:7px;}
+  .octet-rule{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;}
+  .shell-dot{width:9px;height:9px;border-radius:50%;border:1px solid var(--dim);background:transparent;transition:all .4s;}
+  .shell-dot.filled{background:var(--accent);border-color:var(--accent);box-shadow:0 0 6px var(--accent);}
+  .octet-label{font-family:'Share Tech Mono',monospace;font-size:.63rem;color:var(--dim);width:100%;margin-top:4px;}
+  .real-world{grid-column:1 / -1;}
+  .rw-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
+  .rw-card{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:6px;padding:12px;}
+  .rw-card h4{font-family:'Orbitron',monospace;font-size:.6rem;color:var(--yellow);margin-bottom:6px;letter-spacing:.08em;}
+  .rw-card p{font-size:.74rem;color:var(--dim);line-height:1.55;}
+  .rw-card span{color:var(--text);font-weight:600;}
+  .steam-section{margin-top:10px;padding:12px;background:rgba(180,77,255,.06);border:1px solid rgba(180,77,255,.2);border-radius:6px;}
+  .steam-section h4{font-family:'Orbitron',monospace;font-size:.6rem;color:var(--purple);margin-bottom:7px;letter-spacing:.1em;}
+  .steam-section p{font-size:.74rem;color:var(--dim);line-height:1.55;}
+  .step-list{counter-reset:steps;list-style:none;margin-top:7px;}
+  .step-list li{counter-increment:steps;padding:5px 0 5px 24px;position:relative;font-size:.74rem;color:var(--text);border-bottom:1px solid rgba(255,255,255,.04);line-height:1.5;}
+  .step-list li::before{content:counter(steps);position:absolute;left:0;width:16px;height:16px;background:rgba(0,229,255,.15);border:1px solid var(--accent);border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--accent);display:flex;align-items:center;justify-content:center;top:6px;}
+  @media(max-width:680px){.main-grid{grid-template-columns:1fr;}.rw-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Electron Movement &amp; Stability</h1>
+  <p>// Systems reorganize toward lower energy states through electron transfer and sharing //</p>
+</header>
+
+<div class="main-grid">
+  <!-- SIM -->
+  <div class="panel">
+    <div class="panel-title">Atomic Simulation — Click atoms or press Auto-Play</div>
+    <div class="mode-tabs">
+      <button class="tab active" onclick="setMode('ionic')">Ionic (Na + Cl)</button>
+      <button class="tab" onclick="setMode('covalent')">Covalent (H + H)</button>
+      <button class="tab" onclick="setMode('water')">Polar Covalent (H₂O)</button>
+    </div>
+    <canvas id="sim-canvas"></canvas>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#ffd60a;box-shadow:0 0 6px #ffd60a"></div>Sodium</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#39ff14;box-shadow:0 0 6px #39ff14"></div>Chlorine</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00aaff;box-shadow:0 0 6px #00aaff"></div>Hydrogen</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff5533;box-shadow:0 0 6px #ff5533"></div>Oxygen</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00e5ff;box-shadow:0 0 6px #00e5ff"></div>Valence e⁻</div>
+    </div>
+    <div class="controls">
+      <button class="btn" onclick="resetSim()">↺ Reset</button>
+      <button class="btn" onclick="autoPlay()">▶ Auto-Play</button>
+      <button class="btn orange" onclick="nudge()">⚡ Add Energy</button>
+    </div>
+    <div class="status-bar" id="status">Select a bond mode, then click an atom or press AUTO-PLAY to begin.</div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right-col">
+    <div class="info-card">
+      <h3>⬡ Octet Rule — Full Shells = Stability</h3>
+      <p>Atoms with incomplete valence shells are <strong style="color:var(--accent2)">unstable</strong> — high potential energy, like a ball on a hilltop. A full outer shell of 8 electrons creates <strong style="color:var(--green)">minimum energy</strong> and maximum stability.</p>
+      <div class="octet-rule" id="octet-dots"></div>
+    </div>
+    <div class="info-card">
+      <h3>📋 Interaction Steps</h3>
+      <ol class="step-list">
+        <li>Pick a bond type from the tabs above.</li>
+        <li>Watch <strong>unstable atoms</strong> pulse with incomplete shells.</li>
+        <li>Click any atom to start approach via electrostatic attraction.</li>
+        <li>Electrons <strong>transfer or share</strong> when atoms are close enough.</li>
+        <li>Energy graph drops — system reaches <strong>stable state</strong>.</li>
+        <li>Press ⚡ to add energy and return atoms to unstable state.</li>
+      </ol>
+    </div>
+    <div class="info-card">
+      <h3>💡 Why Lower Energy?</h3>
+      <p>Nature always seeks the path of least resistance. Electrons in incomplete shells carry excess potential energy. Filling shells is the energetic "downhill" path — driven by electrostatic force and the 2nd Law of Thermodynamics.</p>
+    </div>
+  </div>
+
+  <!-- ENERGY GRAPH full width -->
+  <div class="panel" style="grid-column:1/-1;">
+    <div class="panel-title">Energy Level Graph — Reaction Coordinate</div>
+    <canvas id="energy-canvas"></canvas>
+    <div style="display:flex;gap:18px;margin-top:7px;font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--dim);">
+      <span style="color:var(--accent2)">■ High Energy — Unstable Reactants</span>
+      <span style="color:var(--yellow)">■ Electron Movement / Transition</span>
+      <span style="color:var(--green)">■ Low Energy — Stable Products</span>
+      <span style="color:var(--accent)">→ ΔE released to environment</span>
+    </div>
+  </div>
+
+  <!-- REAL WORLD -->
+  <div class="panel real-world">
+    <div class="panel-title">Real-World Applications of Electron Movement</div>
+    <div class="rw-grid">
+      <div class="rw-card">
+        <h4>🔋 Batteries</h4>
+        <p>A lithium-ion battery exploits <span>chemical potential energy differences</span> between electrodes. Electrons flow from high-energy anode to low-energy cathode through a circuit — the same drive as our Na→Cl simulation, but harnessed as electricity powering your phone.</p>
+      </div>
+      <div class="rw-card">
+        <h4>🦀 Rusting / Oxidation</h4>
+        <p>Iron atoms <span>lose electrons to oxygen</span> in air — an ionic-like electron transfer forming iron oxides. Fe goes from unstable to more stable oxide states, releasing energy as heat. Every rusty nail is electron movement seeking lower energy, just like our simulation.</p>
+      </div>
+      <div class="rw-card">
+        <h4>🧬 Biology — ATP &amp; Metabolism</h4>
+        <p>Cells run <span>electron transfer chains</span> inside mitochondria. High-energy electrons from food travel down protein chains, releasing energy at each step to produce ATP — life's energy currency. Your heartbeat is electron movement seeking stability, scaled to biology.</p>
+      </div>
+    </div>
+    <div class="steam-section">
+      <h4>⚙ STEAM Integration — Technology &amp; Engineering</h4>
+      <p>This simulation uses <strong style="color:var(--purple)">HTML5 Canvas + JavaScript</strong> — the same foundation as professional molecular dynamics tools like AMBER and GROMACS (scaled to millions of atoms). The physics models Coulomb attraction between opposite charges; the energy graph approximates a Morse potential curve. Students building this in <strong style="color:var(--text)">Scratch</strong> can use <em>Variables</em> for electron counts, <em>Broadcasts</em> for transfer events, and <em>Clones</em> for each electron particle — mirroring object-oriented design used by chemists and materials engineers worldwide. In <strong style="color:var(--text)">PowerPoint</strong>, use motion paths and triggers to animate electrons; in <strong style="color:var(--text)">Canva</strong>, build each bonding phase as a separate animated frame.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('sim-canvas');
+const ctx = canvas.getContext('2d');
+const energyCanvas = document.getElementById('energy-canvas');
+const ectx = energyCanvas.getContext('2d');
+let mode = 'ionic', phase = 'idle', animFrame = 0, approachT = 0, bondFormed = false;
+let autoPlaying = false, energyAnimRunning = false, energyAnimProg = 0;
+let atoms = [], transferEs = [];
+
+function resizeCanvases() {
+  const dpr = window.devicePixelRatio || 1;
+  [canvas, energyCanvas].forEach(c => {
+    const rect = c.getBoundingClientRect();
+    c.width = rect.width * dpr; c.height = rect.height * dpr;
+    (c === canvas ? ctx : ectx).scale(dpr, dpr);
+  });
+}
+
+const defs = {
+  ionic:{
+    atoms:[
+      {id:'Na',label:'Na',col:'#ffd60a',valence:1,need:8,x:.22,y:.5,r:34,tx:.37,ty:.5},
+      {id:'Cl',label:'Cl',col:'#39ff14',valence:7,need:8,x:.78,y:.5,r:38,tx:.63,ty:.5}
+    ],
+    desc:'Na has 1 valence electron (unstable). Cl has 7 — needs just 1 more. Na DONATES its electron to Cl, forming Na⁺ and Cl⁻ ions.',
+    type:'IONIC TRANSFER'
+  },
+  covalent:{
+    atoms:[
+      {id:'H1',label:'H',col:'#00aaff',valence:1,need:2,x:.25,y:.5,r:24,tx:.38,ty:.5},
+      {id:'H2',label:'H',col:'#00aaff',valence:1,need:2,x:.75,y:.5,r:24,tx:.62,ty:.5}
+    ],
+    desc:'Two H atoms each have 1 electron but need 2 for stability. They SHARE both electrons, forming a stable H₂ covalent bond.',
+    type:'COVALENT SHARE'
+  },
+  water:{
+    atoms:[
+      {id:'O',label:'O',col:'#ff5533',valence:6,need:8,x:.5,y:.38,r:32,tx:.5,ty:.38},
+      {id:'H1',label:'H',col:'#00aaff',valence:1,need:2,x:.22,y:.65,r:20,tx:.33,ty:.63},
+      {id:'H2',label:'H',col:'#00aaff',valence:1,need:2,x:.78,y:.65,r:20,tx:.67,ty:.63}
+    ],
+    desc:'Oxygen needs 2 more electrons (has 6). Two H atoms each share 1 electron with O — all atoms reach full shells. Polar covalent bonding.',
+    type:'POLAR COVALENT'
+  }
+};
+
+function getW(){return canvas.getBoundingClientRect().width;}
+function getH(){return canvas.getBoundingClientRect().height;}
+
+function initAtoms() {
+  const w=getW(), h=getH(), def=defs[mode];
+  atoms = def.atoms.map(a=>({
+    ...a,
+    px:a.x*w, py:a.y*h,
+    sx:a.x*w, sy:a.y*h,
+    atx:a.tx*w, aty:a.ty*h,
+    cv:a.valence, charge:0, done:false
+  }));
+  transferEs=[]; approachT=0; bondFormed=false;
+  energyAnimProg=0; phase='idle';
+  setStatus(def.desc);
+  updateOctet(def.atoms[0].valence, def.atoms[0].need);
+  drawEnergyGraph(0);
+}
+
+function setMode(m) {
+  mode=m;
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['ionic','covalent','water'][i]===m);});
+  autoPlaying=false;
+  initAtoms();
+}
+
+function resetSim(){autoPlaying=false;initAtoms();}
+
+function setStatus(msg){document.getElementById('status').textContent=msg;}
+
+function lerp(a,b,t){return a+(b-a)*t;}
+function ease(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
+
+function updateOctet(filled, need=8) {
+  const c=document.getElementById('octet-dots');
+  c.innerHTML='';
+  for(let i=0;i<need;i++){
+    const d=document.createElement('div');
+    d.className='shell-dot'+(i<filled?' filled':'');
+    c.appendChild(d);
+  }
+  const lbl=document.createElement('div');
+  lbl.className='octet-label';
+  const isFull=filled>=need;
+  lbl.textContent=isFull?`✓ FULL SHELL (${need}/${need}) — STABLE`:`${filled}/${need} — UNSTABLE (needs ${need-filled} more)`;
+  lbl.style.color=isFull?'var(--green)':'var(--accent2)';
+  c.appendChild(lbl);
+}
+
+function drawAtom(a, t) {
+  const x=lerp(a.sx,a.atx,ease(Math.min(t,1)));
+  const y=lerp(a.sy,a.aty,ease(Math.min(t,1)));
+  a.px=x; a.py=y;
+  const r=a.r, pls=Math.sin(animFrame*.05)*3;
+
+  if(!bondFormed){
+    ctx.beginPath();ctx.arc(x,y,r+9+pls,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,80,80,${.07+.04*Math.sin(animFrame*.1)})`;ctx.fill();
+  }
+
+  const grd=ctx.createRadialGradient(x,y,0,x,y,r);
+  grd.addColorStop(0,a.col+'cc');grd.addColorStop(.55,a.col+'33');grd.addColorStop(1,a.col+'0a');
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=grd;ctx.fill();
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.strokeStyle=a.col;ctx.lineWidth=1.5;ctx.globalAlpha=.8;ctx.stroke();ctx.globalAlpha=1;
+
+  ctx.font=`bold ${r*.55}px 'Orbitron',monospace`;
+  ctx.fillStyle=a.col;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor=a.col;ctx.shadowBlur=8;ctx.fillText(a.label,x,y);ctx.shadowBlur=0;
+
+  if(bondFormed&&a.charge!==0){
+    ctx.font=`bold ${r*.38}px 'Share Tech Mono',monospace`;
+    ctx.fillStyle=a.charge>0?'#ff5555':'#55aaff';
+    ctx.fillText(a.charge>0?`${a.charge}+`:`${Math.abs(a.charge)}−`,x+r*.7,y-r*.7);
+  }
+
+  drawShell(a,x,y);
+}
+
+function drawShell(a,x,y){
+  const orr=a.r+20, count=a.cv, full=count>=a.need;
+  ctx.beginPath();ctx.arc(x,y,orr,0,Math.PI*2);
+  ctx.strokeStyle=full?'rgba(57,255,20,.28)':'rgba(255,255,255,.06)';
+  ctx.lineWidth=1;ctx.setLineDash([3,5]);ctx.stroke();ctx.setLineDash([]);
+  const off=animFrame*.02;
+  for(let i=0;i<count;i++){
+    const ang=(i/count)*Math.PI*2+off;
+    const ex=x+Math.cos(ang)*orr, ey=y+Math.sin(ang)*orr;
+    const ec=full?'#39ff14':'#00e5ff';
+    ctx.beginPath();ctx.arc(ex,ey,3.5,0,Math.PI*2);
+    ctx.fillStyle=ec;ctx.shadowColor=ec;ctx.shadowBlur=7;ctx.fill();ctx.shadowBlur=0;
+  }
+}
+
+function drawTransferE(te){
+  te.t+=.013; if(te.t>1)te.t=1;
+  const x=lerp(te.sx,te.tx,ease(te.t)), y=lerp(te.sy,te.ty,ease(te.t));
+  ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,229,255,.95)';ctx.shadowColor='#00e5ff';ctx.shadowBlur=16;ctx.fill();ctx.shadowBlur=0;
+  if(te.t>=1&&!te.done){
+    te.done=true;
+    if(mode==='ionic'){
+      atoms[0].cv=0;atoms[1].cv=8;atoms[0].charge=1;atoms[1].charge=-1;
+      bondFormed=true;updateOctet(8,8);
+      setStatus('✓ Bond formed! Na⁺ donated its electron to Cl⁻. Both atoms now have full valence shells — STABLE minimum energy state.');
+    }
+    animEnergyGraph(1);
+  }
+}
+
+function drawCovBond(x1,y1,x2,y2,col='#00e5ff'){
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.globalAlpha=.4;
+  ctx.shadowColor=col;ctx.shadowBlur=8;ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
+  const prog=(Math.sin(animFrame*.07)*.5+.5);
+  const ex=lerp(x1,x2,prog),ey=lerp(y1,y2,prog);
+  ctx.beginPath();ctx.arc(ex,ey,4,0,Math.PI*2);
+  ctx.fillStyle='#00e5ff';ctx.shadowColor='#00e5ff';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+}
+
+function draw(){
+  const w=getW(), h=getH();
+  ctx.clearRect(0,0,w,h);
+  // grid
+  ctx.strokeStyle='rgba(26,45,90,.35)';ctx.lineWidth=.5;
+  for(let x=0;x<w;x+=38){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+  for(let y=0;y<h;y+=38){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+
+  if(phase==='approaching'){approachT+=.009;if(approachT>=1){approachT=1;triggerBond();}}
+  atoms.forEach(a=>drawAtom(a,approachT));
+
+  if(bondFormed){
+    if(mode==='ionic'){
+      ctx.beginPath();ctx.moveTo(atoms[0].px,atoms[0].py);ctx.lineTo(atoms[1].px,atoms[1].py);
+      ctx.strokeStyle='rgba(255,214,10,.25)';ctx.lineWidth=1;ctx.setLineDash([5,8]);ctx.stroke();ctx.setLineDash([]);
+      ctx.font="600 10px 'Exo 2',sans-serif";ctx.fillStyle='#ffd60a';ctx.textAlign='center';
+      const mx=(atoms[0].px+atoms[1].px)/2, my=(atoms[0].py+atoms[1].py)/2;
+      ctx.fillText('ionic bond',mx,my-10);
+    }else if(mode==='covalent'){
+      drawCovBond(atoms[0].px,atoms[0].py,atoms[1].px,atoms[1].py);
+      ctx.font="600 10px 'Exo 2',sans-serif";ctx.fillStyle='#00e5ff';ctx.textAlign='center';
+      ctx.fillText('covalent bond',(atoms[0].px+atoms[1].px)/2,(atoms[0].py+atoms[1].py)/2-14);
+    }else{
+      drawCovBond(atoms[0].px,atoms[0].py,atoms[1].px,atoms[1].py,'#ff7755');
+      drawCovBond(atoms[0].px,atoms[0].py,atoms[2].px,atoms[2].py,'#ff7755');
+      ctx.font="700 11px 'Orbitron',monospace";ctx.fillStyle='#ff5533';ctx.textAlign='center';
+      ctx.fillText('H₂O',atoms[0].px,atoms[0].py-atoms[0].r-22);
+    }
+  }
+
+  transferEs.forEach(te=>drawTransferE(te));
+  transferEs=transferEs.filter(te=>!te.done||te.t<1);
+
+  // state labels
+  atoms.forEach(a=>{
+    ctx.font="600 9px 'Share Tech Mono',monospace";ctx.textAlign='center';
+    if(!bondFormed){
+      ctx.fillStyle='#ff6060';
+      ctx.fillText('UNSTABLE',a.sx,a.sy+a.r+24);
+    }else{
+      ctx.fillStyle='#39ff14';
+      ctx.fillText('STABLE',a.px,a.py+a.r+22);
+    }
+  });
+
+  animFrame++;
+  requestAnimationFrame(draw);
+}
+
+function triggerBond(){
+  phase='bonding';
+  if(mode==='ionic'){
+    transferEs.push({sx:atoms[0].px,sy:atoms[0].py,tx:atoms[1].px,ty:atoms[1].py,t:0,done:false});
+    setStatus('⚡ Electron transfer in progress — Na donating valence electron to Cl...');
+    animEnergyGraph(.55);
+  }else if(mode==='covalent'){
+    bondFormed=true;atoms[0].cv=2;atoms[1].cv=2;
+    updateOctet(2,2);animEnergyGraph(1);
+    setStatus('✓ H₂ covalent bond formed! Both H atoms now share a full shell of 2 electrons — STABLE.');
+  }else{
+    bondFormed=true;atoms[0].cv=8;atoms[1].cv=2;atoms[2].cv=2;
+    updateOctet(8,8);animEnergyGraph(1);
+    setStatus('✓ Water (H₂O) formed! Oxygen achieved full octet by sharing electrons with both hydrogen atoms — STABLE.');
+  }
+}
+
+canvas.addEventListener('click',()=>{
+  if(phase==='idle'){phase='approaching';setStatus('Atoms approaching — electrostatic attraction pulling toward stability...');animEnergyGraph(.25);}
+});
+
+function nudge(){resetSim();setStatus('⚡ External energy added — system returned to unstable high-energy state. Watch atoms seek stability again.');}
+
+function autoPlay(){
+  if(autoPlaying)return;autoPlaying=true;resetSim();
+  setTimeout(()=>{if(autoPlaying){phase='approaching';setStatus('Auto-play: Atoms approaching via electrostatic attraction...');animEnergyGraph(.2);}},800);
+}
+
+// Energy graph
+function animEnergyGraph(target){
+  if(energyAnimRunning)return;
+  const start=energyAnimProg;
+  energyAnimRunning=true;
+  let t=0;
+  function step(){
+    t+=.012; energyAnimProg=start+(target-start)*ease(Math.min(t,1));
+    drawEnergyGraph(energyAnimProg);
+    if(t<1){requestAnimationFrame(step);}else{energyAnimRunning=false;}
+  }
+  step();
+}
+
+function drawEnergyGraph(prog){
+  const w=energyCanvas.getBoundingClientRect().width;
+  const h=energyCanvas.getBoundingClientRect().height;
+  ectx.clearRect(0,0,w,h);
+  const pad={l:46,r:18,t:14,b:26};
+  const gw=w-pad.l-pad.r, gh=h-pad.t-pad.b;
+
+  ectx.fillStyle='#020510';ectx.fillRect(0,0,w,h);
+
+  // Grid
+  ectx.strokeStyle='rgba(26,45,90,.45)';ectx.lineWidth=.5;
+  for(let i=0;i<=4;i++){const y=pad.t+(gh/4)*i;ectx.beginPath();ectx.moveTo(pad.l,y);ectx.lineTo(w-pad.r,y);ectx.stroke();}
+
+  // Y labels
+  ['HIGH','','MID','','LOW'].forEach((lbl,i)=>{
+    const y=pad.t+(gh/4)*i;
+    ectx.font="8px 'Share Tech Mono',monospace";ectx.textAlign='right';ectx.fillStyle='#4a6080';
+    ectx.fillText(lbl,pad.l-4,y+3);
+  });
+
+  // X labels
+  ectx.textAlign='center';ectx.fillStyle='#4a6080';
+  ['Reactants','Transition','Products'].forEach((lbl,i)=>{
+    ectx.fillText(lbl,pad.l+(gw/2)*i,h-4);
+  });
+  ectx.fillText('Products',pad.l+gw,h-4);
+
+  // Build curve points: high start (y=0.1*gh), small activation bump, drop to stable (y=0.82*gh)
+  const pts=[];
+  const N=120;
+  for(let i=0;i<=N;i++){
+    const t=i/N;
+    let e;
+    if(t<0.12) e=0.1;
+    else if(t<0.35) e=0.1+(t-0.12)/0.23*0.18;   // activation hump
+    else if(t<0.62) e=0.28-(t-0.35)/0.27*0.23;   // drop
+    else e=0.05;                                   // stable plateau
+    pts.push({x:pad.l+t*gw, y:pad.t+e*gh*3.4});
+  }
+
+  // Clamp
+  pts.forEach(p=>{p.y=Math.min(p.y,pad.t+gh);p.y=Math.max(p.y,pad.t);});
+
+  // Full curve (dim)
+  ectx.beginPath();ectx.moveTo(pts[0].x,pts[0].y);
+  pts.forEach(p=>ectx.lineTo(p.x,p.y));
+  ectx.strokeStyle='rgba(26,45,90,.7)';ectx.lineWidth=1;ectx.stroke();
+
+  // Animated fill up to progress
+  const pidx=Math.round(prog*N);
+  if(pidx>0){
+    const grd=ectx.createLinearGradient(pts[0].x,0,pts[pidx].x,0);
+    grd.addColorStop(0,'#ff6b35');grd.addColorStop(.45,'#ffd60a');grd.addColorStop(1,'#39ff14');
+    ectx.beginPath();ectx.moveTo(pts[0].x,pts[0].y);
+    for(let i=1;i<=pidx;i++)ectx.lineTo(pts[i].x,pts[i].y);
+    ectx.strokeStyle=grd;ectx.lineWidth=2.5;ectx.shadowColor='#ffd60a';ectx.shadowBlur=5;ectx.stroke();ectx.shadowBlur=0;
+    const cp=pts[pidx];
+    ectx.beginPath();ectx.arc(cp.x,cp.y,5,0,Math.PI*2);
+    ectx.fillStyle='#fff';ectx.shadowColor='#fff';ectx.shadowBlur=10;ectx.fill();ectx.shadowBlur=0;
+  }
+
+  // Phase annotations
+  ectx.font="8px 'Share Tech Mono',monospace";ectx.textAlign='center';
+  ectx.fillStyle='#ff6b35';ectx.fillText('⬤ HIGH E / UNSTABLE',pad.l+gw*.09,pad.t+gh*.35);
+  if(prog>=.88){
+    ectx.fillStyle='#39ff14';ectx.fillText('⬤ LOW E / STABLE',pad.l+gw*.91,pad.t+gh*.88);
+    const ax=pad.l+gw*.78;
+    ectx.strokeStyle='rgba(0,229,255,.45)';ectx.lineWidth=1;ectx.setLineDash([3,4]);
+    ectx.beginPath();ectx.moveTo(ax,pts[0].y);ectx.lineTo(ax,pts[N].y);ectx.stroke();ectx.setLineDash([]);
+    ectx.fillStyle='#00e5ff';ectx.fillText('ΔE released',ax,((pts[0].y+pts[N].y)/2)-2);
+  }
+}
+
+window.addEventListener('resize',()=>{resizeCanvases();initAtoms();});
+resizeCanvases();
+initAtoms();
+draw();
+</script>
+</body>
+</html>
